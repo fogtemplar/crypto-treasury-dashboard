@@ -685,7 +685,10 @@
         coingeckoApi: 'CoinGecko API (real-time)',
         officialData: 'Official Announcement',
         secFiling: 'SEC Filing',
-        lastFiling: 'Last SEC Filing'
+        lastFiling: 'Last SEC Filing',
+        mstrPrice: 'Strategy (MSTR) Stock',
+        bmrnPrice: 'BitMine (BMNR) Stock',
+        stockMarket: 'Stock Market'
       },
       ko: {
         title: '데스스파이럴',
@@ -714,7 +717,10 @@
         coingeckoApi: 'CoinGecko API (실시간)',
         officialData: '공식 발표',
         secFiling: 'SEC 공시',
-        lastFiling: '최근 SEC 공시'
+        lastFiling: '최근 SEC 공시',
+        mstrPrice: 'Strategy (MSTR) 주가',
+        bmrnPrice: 'BitMine (BMNR) 주가',
+        stockMarket: '주식 시장'
       }
     };
 
@@ -729,6 +735,7 @@
       const [dataStatus, setDataStatus] = useState('loading');
       const [lastUpdate, setLastUpdate] = useState(new Date());
       const [secFilings, setSecFilings] = useState({ strategy: null, bitmine: null });
+      const [stockPrices, setStockPrices] = useState({ mstr: null, bmnr: null });
       
       const wsRefs = useRef({ btc: null, eth: null });
       const t = translations[language];
@@ -834,6 +841,33 @@
         // 하루에 한 번만 체크 (SEC는 실시간이 아니므로)
         const interval = setInterval(fetchSECFilings, 86400000);
         return () => clearInterval(interval);
+      }, []);
+
+      // 주식 가격 가져오기 (Yahoo Finance)
+      useEffect(() => {
+        const fetchStockPrices = async () => {
+          try {
+            const corsProxy = 'https://api.allorigins.win/raw?url=';
+            const url = 'https://query2.finance.yahoo.com/v6/finance/quote?symbols=MSTR,BMNR';
+            const response = await fetch(corsProxy + encodeURIComponent(url));
+            if (response.ok) {
+              const data = await response.json();
+              const quotes = data.quoteResponse?.result || [];
+              const mstr = quotes.find(q => q.symbol === 'MSTR');
+              const bmnr = quotes.find(q => q.symbol === 'BMNR');
+              setStockPrices({
+                mstr: mstr ? { price: mstr.regularMarketPrice, change: mstr.regularMarketChangePercent } : null,
+                bmnr: bmnr ? { price: bmnr.regularMarketPrice, change: bmnr.regularMarketChangePercent } : null
+              });
+              console.log('✅ Stock prices fetched:', mstr?.regularMarketPrice, bmnr?.regularMarketPrice);
+            }
+          } catch (err) {
+            console.log('⚠️ Stock price fetch error:', err.message);
+          }
+        };
+        fetchStockPrices();
+        const stockInterval = setInterval(fetchStockPrices, 30000);
+        return () => clearInterval(stockInterval);
       }, []);
 
       // WebSocket 연결
@@ -1179,6 +1213,24 @@
                 </div>
               )}
             </div>
+            {stockPrices.mstr && (
+              <div className="price-card" style={{ animationDelay: '0.3s' }}>
+                <div className="price-label">📈 {t.mstrPrice}</div>
+                <div className="price-value">{formatPrice(stockPrices.mstr.price)}</div>
+                <div className={`price-change ${stockPrices.mstr.change >= 0 ? 'positive' : 'negative'}`}>
+                  {stockPrices.mstr.change >= 0 ? '▲' : '▼'} {Math.abs(stockPrices.mstr.change).toFixed(2)}%
+                </div>
+              </div>
+            )}
+            {stockPrices.bmnr && (
+              <div className="price-card" style={{ animationDelay: '0.4s' }}>
+                <div className="price-label">📈 {t.bmrnPrice}</div>
+                <div className="price-value">{formatPrice(stockPrices.bmnr.price)}</div>
+                <div className={`price-change ${stockPrices.bmnr.change >= 0 ? 'positive' : 'negative'}`}>
+                  {stockPrices.bmnr.change >= 0 ? '▲' : '▼'} {Math.abs(stockPrices.bmnr.change).toFixed(2)}%
+                </div>
+              </div>
+            )}
           </div>
 
           {companies && (
