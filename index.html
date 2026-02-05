@@ -843,30 +843,41 @@
         return () => clearInterval(interval);
       }, []);
 
-      // 주식 가격 가져오기 (Yahoo Finance)
+      // 주식 가격 가져오기 (Yahoo Finance HTML 파싱)
       useEffect(() => {
-        const fetchStockPrices = async () => {
+        const fetchStockPrice = async (symbol) => {
           try {
             const corsProxy = 'https://api.allorigins.win/raw?url=';
-            const url = 'https://query2.finance.yahoo.com/v6/finance/quote?symbols=MSTR,BMNR';
+            const url = `https://finance.yahoo.com/quote/${symbol}/`;
             const response = await fetch(corsProxy + encodeURIComponent(url));
             if (response.ok) {
-              const data = await response.json();
-              const quotes = data.quoteResponse?.result || [];
-              const mstr = quotes.find(q => q.symbol === 'MSTR');
-              const bmnr = quotes.find(q => q.symbol === 'BMNR');
-              setStockPrices({
-                mstr: mstr ? { price: mstr.regularMarketPrice, change: mstr.regularMarketChangePercent } : null,
-                bmnr: bmnr ? { price: bmnr.regularMarketPrice, change: bmnr.regularMarketChangePercent } : null
-              });
-              console.log('✅ Stock prices fetched:', mstr?.regularMarketPrice, bmnr?.regularMarketPrice);
+              const html = await response.text();
+              const priceMatch = html.match(/data-testid="qsp-price"[^>]*>\s*([\d,.]+)/);
+              const changeMatch = html.match(/data-testid="qsp-price-change-percent"[^>]*>\(?([-\d.]+)%/);
+              if (priceMatch) {
+                return {
+                  price: parseFloat(priceMatch[1].replace(/,/g, '')),
+                  change: changeMatch ? parseFloat(changeMatch[1]) : 0
+                };
+              }
             }
           } catch (err) {
-            console.log('⚠️ Stock price fetch error:', err.message);
+            console.log(`⚠️ ${symbol} price fetch error:`, err.message);
           }
+          return null;
         };
-        fetchStockPrices();
-        const stockInterval = setInterval(fetchStockPrices, 30000);
+
+        const fetchAllStockPrices = async () => {
+          const [mstr, bmnr] = await Promise.all([
+            fetchStockPrice('MSTR'),
+            fetchStockPrice('BMNR')
+          ]);
+          setStockPrices({ mstr, bmnr });
+          if (mstr || bmnr) console.log('✅ Stock prices:', mstr?.price, bmnr?.price);
+        };
+
+        fetchAllStockPrices();
+        const stockInterval = setInterval(fetchAllStockPrices, 60000);
         return () => clearInterval(stockInterval);
       }, []);
 
